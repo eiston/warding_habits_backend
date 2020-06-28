@@ -16,6 +16,9 @@ GET     /favicon.ico                            404
 GET     /public/*filepath                       Static.Serve("public")
 
 GET     /summonerinfo/:region/:name                     App.SummonerInfo
+GET     /warddata/:region/:name                     App.WardData
+
+
 # Catch all, this will route any request into the controller path
 #
 #                    **** WARNING ****
