@@ -78,18 +78,52 @@ func (c App) getMatchlist(region string, accountId string, beginTime int) map[st
 }
 
 func (c App) WardData(region string, name string) revel.Result {
-	result := c.getSummonerByName(region, name)
+	summoner := c.getSummonerByName(region, name)
 
-	accountId := result["data"]["accountId"]
+	accountId := summoner["accountId"]
 
 	matchList := c.getMatchlist(region, accountId, 0)
 
+	var matchDetails map[string]interface{}
+	var timeline map[string]interface{}
+
+
 	for _, match := range matchList {
-		
+		MatchDetailUrl := fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v4/matches/%s?api_key=%s", region, match["gameId"], API_KEY)
+		detailResp, detailErr := http.Get(MatchDetailUrl)
+		json.NewDecoder(detailResp.Body).Decode(&matchDetails)
+		detailResp.Body.Close()
+
+		participantId := 1 
+
+		for _, participant := range matchDetails["participantIdentities"] {
+			if participant["player"]["accountId"] == summoner["accountId"] {
+				participantId = participant["participantId"]
+			}
+		}
+
+		TimelineUrl := fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v4/timelines/by-match/%s?api_key=%s", region, match["gameId"], API_KEY)
+		timlineResp, timelineErr := http.Get(TimelineUrl)
+		json.NewDecoder(timlineResp.Body).Decode(&timeline)
+		timlineResp.Body.Close()
+
+		for _, frame := range timeline["frames"] {
+			x := 0
+			y := 0
+			for _, participant := range frame["participantFrames"] {
+				if participantId == participant["participantId"] {
+					x = participant["position"]["x"]
+					y = participant["position"]["y"]
+				}
+			}
+			for _, event := range frame["events"] {
+				if event["type"] == "WARD_PLACED" && event["creatorId"] == participantId{
+					x = participant["position"]["x"]
+					y = participant["position"]["y"]
+				}
+			}
+		}
+
 	}
-
-
-
-
 	var data [max_length]([]Point)
 }
