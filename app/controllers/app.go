@@ -6,6 +6,7 @@ import (
 	"log"
 	"fmt"
 	"encoding/json"
+	// "sort"
 )
 
 type App struct {
@@ -13,12 +14,14 @@ type App struct {
 }
 
 type Point struct {
+	timestamp int
 	x int
 	y int
 	value int
 }
 
-const API_KEY = "RGAPI-ca13e0ef-8468-4771-a54d-40881a73496b"
+
+const API_KEY = "RGAPI-bad956ea-222a-490a-abb9-4aa9e73c3f88"
 
 func (c App) Index() revel.Result {
 	return c.Render()
@@ -66,7 +69,29 @@ func (c App) getSummonerByName(region string, name string) map[string]interface{
 }
 
 func (c App) getMatchlist(region string, accountId string, beginTime int) map[string]interface{} {
-	var url = fmt.Sprintf("https://%s.api.riotgames.com/lol/summoner/v4/summoners/by-name/%s?beginTime=%d&api_key=%s", region, accountId, beginTime, API_KEY)
+	var url = fmt.Sprintf("https://%s.api.riotgames.com/lol/summoner/v4/matchlists/by-account/%s?beginTime=%d&api_key=%s", region, accountId, beginTime, API_KEY)
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result
+}
+func (c App) getMatchDetails(region string, gameId string) map[string]interface{} {
+	var url = fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v4/matches/%s?beginTime=%d&api_key=%s", region, gameId, API_KEY)
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result
+}
+func (c App) getMatchTimeline(region string, gameId string) map[string]interface{} {
+	var url = fmt.Sprintf("https://%s.api.riotgames.com/lol/timelines/by-match/%s?beginTime=%d&api_key=%s", region, gameId, API_KEY)
 	resp, err := http.Get(url)
 	if err != nil {
 		log.Fatal(err)
@@ -80,50 +105,44 @@ func (c App) getMatchlist(region string, accountId string, beginTime int) map[st
 func (c App) WardData(region string, name string) revel.Result {
 	summoner := c.getSummonerByName(region, name)
 
-	accountId := summoner["accountId"]
+	accountId := fmt.Sprintf("%v", summoner["accountId"])
 
 	matchList := c.getMatchlist(region, accountId, 0)
 
-	var matchDetails map[string]interface{}
-	var timeline map[string]interface{}
+	var data [][]Point
 
-
-	for _, match := range matchList {
-		MatchDetailUrl := fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v4/matches/%s?api_key=%s", region, match["gameId"], API_KEY)
-		detailResp, detailErr := http.Get(MatchDetailUrl)
-		json.NewDecoder(detailResp.Body).Decode(&matchDetails)
-		detailResp.Body.Close()
-
+	for _, match := range list(matchList["matches"]) {
+		gameId := fmt.Sprintf("%v", match["gameId"])
+		matchDetails := c.getMatchDetails(region, gameId)
 		participantId := 1 
-
 		for _, participant := range matchDetails["participantIdentities"] {
 			if participant["player"]["accountId"] == summoner["accountId"] {
-				participantId = participant["participantId"]
+				participantId = participant["participantId"].(int)
+				break
 			}
 		}
 
-		TimelineUrl := fmt.Sprintf("https://%s.api.riotgames.com/lol/match/v4/timelines/by-match/%s?api_key=%s", region, match["gameId"], API_KEY)
-		timlineResp, timelineErr := http.Get(TimelineUrl)
-		json.NewDecoder(timlineResp.Body).Decode(&timeline)
-		timlineResp.Body.Close()
+		timeline:= c.getMatchTimeline(region, gameId)
 
 		for _, frame := range timeline["frames"] {
-			x := 0
-			y := 0
+			point := Point{0,0,0,1}
 			for _, participant := range frame["participantFrames"] {
 				if participantId == participant["participantId"] {
-					x = participant["position"]["x"]
-					y = participant["position"]["y"]
+					point.x = participant["position"]["x"].(int)
+					point.y = participant["position"]["y"].(int)
 				}
 			}
 			for _, event := range frame["events"] {
-				if event["type"] == "WARD_PLACED" && event["creatorId"] == participantId{
-					x = participant["position"]["x"]
-					y = participant["position"]["y"]
+				if event["type"] == "WARD_PLACED" && event["creatorId"] == participantId {
+					point.timestamp = event["timestamp"].(int)
+					if cap(data) <= _ {
+						var s []Point
+						data = append(data,s) 
+					}
+					data[_] = append(data[_],point)
 				}
 			}
 		}
-
 	}
-	var data [max_length]([]Point)
+	return c.RenderJSON(data)
 }
