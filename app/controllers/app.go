@@ -110,7 +110,7 @@ func (c App) WardData(region string, name string) revel.Result {
 	matchList := c.getMatchlist(region, accountId, 0)
 
 	var data [][]Point
-
+	//Here I dont know how to iterate this shit :(
 	for _, match := range list(matchList["matches"]) {
 		gameId := fmt.Sprintf("%v", match["gameId"])
 		matchDetails := c.getMatchDetails(region, gameId)
